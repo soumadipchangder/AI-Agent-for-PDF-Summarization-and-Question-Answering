@@ -9,24 +9,30 @@ pinned: false
 
 # AI PDF Agent
 
-A production-ready Retrieval-Augmented Generation (RAG) system for querying and summarizing PDF documents. Uses LangGraph to perform self-reflection for high-quality responses.
+A production-ready Retrieval-Augmented Generation (RAG) system for querying and summarizing PDF documents. Powered by LangGraph with self-reflection for high-quality, citation-backed answers.
 
 ## Features
 
 - **Multi-Document Ingestion**: Upload and process multiple PDFs simultaneously.
-- **Hybrid Retrieval**: `EnsembleRetriever` combining FAISS (dense) + BM25 (sparse) for high recall.
-- **Self-Reflecting Agent**: LangGraph workflow generates, evaluates, and rewrites answers for quality.
+- **Hybrid Retrieval**: Custom retriever combining FAISS (dense semantic) + BM25 (sparse keyword) for high recall.
+- **Self-Reflecting Agent**: LangGraph workflow that generates, evaluates, and optionally rewrites answers.
 - **Automatic Summarization**: Generates a high-level summary upon document upload.
 - **Source Citations**: Returns exact source filename and page numbers with every answer.
 - **Conversational Memory**: Maintains context for natural follow-up questions.
 
 ## Architecture
 
-- **Frontend**: Streamlit (`app.py`) — interactive chat UI
-- **Backend**: Flask API (`backend/server.py`) — orchestration and routing
-- **LLM Engine**: Groq (`llama-3.1-8b-instant`) via LangChain
-- **Vector DB**: FAISS (local `faiss_index/` directory)
-- **Embeddings**: `sentence-transformers/all-MiniLM-L6-v2` via HuggingFace
+```
+Streamlit UI (app.py)
+│
+├── PDF Upload → loader.py → chunking.py → embeddings.py → vectorstore.py (FAISS)
+│
+├── Hybrid Retriever (tools/retrieval_tool.py) → FAISS + BM25
+│
+└── LangGraph Agent (agents/pdf_agent.py) → Groq LLM (llama-3.1-8b-instant)
+```
+
+Single-process architecture — no backend server needed.
 
 ## Deployment on Hugging Face Spaces
 
@@ -40,13 +46,11 @@ A production-ready Retrieval-Augmented Generation (RAG) system for querying and 
 
 ### 3. Push the Code
 ```bash
-git init
-git remote add origin https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
+git remote add space https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
 git add .
 git commit -m "Initial commit"
-git push origin main
+git push space main
 ```
-> **Important**: Make sure `.env` is in `.gitignore` so you never commit your API key!
 
 The Space will build and expose the Streamlit UI on port 7860 automatically.
 
@@ -66,10 +70,7 @@ pip install -r requirements.txt
 # Create .env file
 echo 'GROQ_API_KEY="your-key-here"' > .env
 
-# Terminal 1 - Start Flask backend
-PYTHONPATH=. python3 backend/server.py
-
-# Terminal 2 - Start Streamlit frontend
+# Run the app
 streamlit run app.py
 ```
 
@@ -83,18 +84,16 @@ Access the app at [http://localhost:7860](http://localhost:7860)
 ## Directory Structure
 
 ```
-├── app.py                     # Streamlit Frontend
-├── backend/
-│   └── server.py              # Flask REST Backend
+├── app.py                     # Streamlit App (single entry point)
 ├── agents/
-│   └── pdf_agent.py           # LangGraph Agent
+│   └── pdf_agent.py           # LangGraph Agent (retrieve → generate → reflect)
 ├── rag/
-│   ├── loader.py              # PDF ingestion
-│   ├── chunking.py            # Text splitting
-│   ├── embeddings.py          # HuggingFace embedding model
-│   └── vectorstore.py         # FAISS DB management
+│   ├── loader.py              # PDF ingestion via PyPDF
+│   ├── chunking.py            # RecursiveCharacterTextSplitter
+│   ├── embeddings.py          # HuggingFace sentence-transformer
+│   └── vectorstore.py         # FAISS vector database
 ├── tools/
-│   └── retrieval_tool.py      # Hybrid FAISS+BM25 retriever
+│   └── retrieval_tool.py      # Custom FAISS + BM25 hybrid retriever
 ├── requirements.txt
 ├── Dockerfile
 └── README.md
