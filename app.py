@@ -1,5 +1,7 @@
 import os
+import sys
 import tempfile
+import traceback
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -26,24 +28,23 @@ st.set_page_config(
 # Session State Initialization
 # ============================================================
 if "messages" not in st.session_state:
-    st.session_state.messages = []          # Chat history for display
+    st.session_state.messages = []
 if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []      # LangGraph message history
+    st.session_state.chat_history = []
 if "agent" not in st.session_state:
     st.session_state.agent = None
 if "document_summary" not in st.session_state:
     st.session_state.document_summary = ""
 if "pdfs_uploaded" not in st.session_state:
     st.session_state.pdfs_uploaded = False
-if "is_processing" not in st.session_state:
-    st.session_state.is_processing = False
+if "processing_error" not in st.session_state:
+    st.session_state.processing_error = ""
 
 # ============================================================
-# Cached Resource: Embedding Model (loaded only once per session)
+# Cached Resource: Embedding Model (loaded once, survives reruns)
 # ============================================================
-@st.cache_resource(show_spinner="Loading embedding model...")
+@st.cache_resource(show_spinner="Loading embedding model (first time may take a minute)...")
 def load_embedding_model():
-    """Load HuggingFace sentence-transformer model. Cached so it's only loaded once."""
     return get_embedding_model()
 
 # ============================================================
@@ -51,81 +52,83 @@ def load_embedding_model():
 # ============================================================
 def process_uploaded_pdfs(uploaded_files):
     """
-    Ingests uploaded PDFs, builds the FAISS + BM25 hybrid retriever,
-    initializes the LangGraph PDF agent, and generates an automatic summary.
-    All done directly in process — no HTTP calls.
+    Full pipeline: PDF → chunks → FAISS + BM25 → LangGraph Agent → Summary.
+    All in-process, no HTTP calls.
     """
+    st.session_state.processing_error = ""
+
     groq_api_key = os.getenv("GROQ_API_KEY")
     if not groq_api_key:
-        st.sidebar.error("GROQ_API_KEY not found. Please add it to your .env file or HF Spaces secrets.")
-        return
+        st.session_state.processing_error = "❌ GROQ_API_KEY not found. Set it in .env (local) or as a HF Spaces Secret."
+        return False
 
-    st.session_state.is_processing = True
+    status = st.status("Processing documents...", expanded=True)
 
     try:
         all_docs = []
         file_names = []
 
-        # Load PDFs from a temp directory
+        # --- Save & Load PDFs ---
         with tempfile.TemporaryDirectory() as tmpdir:
-            progress = st.sidebar.progress(0, text="Saving and loading PDFs...")
-
-            for i, file in enumerate(uploaded_files):
+            for file in uploaded_files:
+                status.write(f"📄 Loading {file.name}...")
                 filepath = os.path.join(tmpdir, file.name)
                 with open(filepath, "wb") as f:
                     f.write(file.getbuffer())
-
                 docs = load_single_pdf(filepath)
                 all_docs.extend(docs)
                 file_names.append(file.name)
-                progress.progress((i + 1) / len(uploaded_files), text=f"Loaded {file.name}")
 
-            if not all_docs:
-                st.sidebar.error("No valid text could be extracted from the uploaded PDFs.")
-                return
+        if not all_docs:
+            st.session_state.processing_error = "❌ No text could be extracted from the uploaded PDFs."
+            status.update(label="Failed", state="error")
+            return False
 
-            # --- Chunking ---
-            progress.progress(0.5, text="Splitting documents into chunks...")
-            chunks = split_documents(all_docs)
+        # --- Chunking ---
+        status.write("✂️ Splitting into chunks...")
+        chunks = split_documents(all_docs)
 
-            # --- Embedding & Vector Store ---
-            progress.progress(0.65, text="Building vector database...")
-            embeddings = load_embedding_model()
-            # Use an in-memory FAISS store (no persist dir) so it resets on each upload
-            vectorstore_manager = VectorStoreManager(embeddings, persist_directory=None)
-            vectorstore_manager.add_documents(chunks)
+        # --- Embeddings + FAISS ---
+        status.write("🧠 Building vector database (embedding model loading)...")
+        embeddings = load_embedding_model()
+        vectorstore_manager = VectorStoreManager(embeddings, persist_directory=None)
+        vectorstore_manager.add_documents(chunks)
 
-            # --- Hybrid Retriever ---
-            progress.progress(0.8, text="Building hybrid retriever (FAISS + BM25)...")
-            hybrid_retriever = HybridRetriever(vectorstore_manager)
-            hybrid_retriever.build_ensemble_retriever(chunks)
+        # --- Hybrid Retriever ---
+        status.write("🔍 Building hybrid retriever (FAISS + BM25)...")
+        hybrid_retriever = HybridRetriever(vectorstore_manager)
+        hybrid_retriever.build_ensemble_retriever(chunks)
 
-            # --- LangGraph Agent ---
-            progress.progress(0.9, text="Initializing AI agent...")
-            st.session_state.agent = PDFAgent(
-                retriever_callable=hybrid_retriever.get_retriever(),
-                groq_api_key=groq_api_key
-            )
-            # Reset conversation history for new docs
-            st.session_state.chat_history = []
-            st.session_state.messages = []
+        # --- LangGraph Agent ---
+        status.write("🤖 Initializing LangGraph agent...")
+        st.session_state.agent = PDFAgent(
+            retriever_callable=hybrid_retriever.get_retriever(),
+            groq_api_key=groq_api_key
+        )
 
-            # --- Auto-summary ---
-            progress.progress(0.95, text="Generating document summary...")
-            summary_result = st.session_state.agent.run(
-                "Provide a concise high-level summary of the document(s). What are the main topics and key takeaways?",
-                chat_history=[]
-            )
-            st.session_state.document_summary = summary_result.get("answer", "Summary unavailable.")
-            st.session_state.pdfs_uploaded = True
-            st.session_state.is_processing = False
+        # --- Auto Summary ---
+        status.write("📝 Generating document summary...")
+        summary_result = st.session_state.agent.run(
+            "Provide a concise high-level summary of the document(s). What are the main topics and key takeaways?",
+            chat_history=[]
+        )
+        st.session_state.document_summary = summary_result.get("answer", "Summary unavailable.")
 
-            progress.progress(1.0, text="✅ Ready!")
-            st.sidebar.success(f"✅ Processed {len(file_names)} file(s)!")
+        # Reset chat for new docs
+        st.session_state.chat_history = []
+        st.session_state.messages = []
+        st.session_state.pdfs_uploaded = True
+
+        status.update(label=f"✅ Processed {len(file_names)} file(s) successfully!", state="complete")
+        return True
 
     except Exception as e:
-        st.sidebar.error(f"Error during processing: {e}")
-        st.session_state.is_processing = False
+        error_detail = traceback.format_exc()
+        print(error_detail, file=sys.stderr)
+        st.session_state.processing_error = f"❌ Error: {e}"
+        status.update(label="Processing failed", state="error")
+        status.write(f"```\n{error_detail}\n```")
+        return False
 
 
 # ============================================================
@@ -136,7 +139,7 @@ st.markdown("Upload your PDFs, review the automatic summary, and ask questions!"
 
 # --- Sidebar: Upload ---
 with st.sidebar:
-    st.header("📁 Document Ingestion")
+    st.header("📁 Document Upload")
 
     uploaded_files = st.file_uploader(
         "Upload one or more PDFs",
@@ -144,12 +147,14 @@ with st.sidebar:
         accept_multiple_files=True
     )
 
-    if st.button(
-        "⚙️ Process Documents",
-        disabled=st.session_state.is_processing or not uploaded_files
-    ):
-        process_uploaded_pdfs(uploaded_files)
-        st.rerun()
+    if st.button("⚙️ Process Documents", disabled=not uploaded_files):
+        success = process_uploaded_pdfs(uploaded_files)
+        if success:
+            st.rerun()
+
+# Show processing error if any (persists across reruns)
+if st.session_state.processing_error:
+    st.error(st.session_state.processing_error)
 
 # --- Main Area ---
 if st.session_state.pdfs_uploaded:
@@ -189,7 +194,7 @@ if st.session_state.pdfs_uploaded:
                     raw_citations = result.get("citations", [])
                     st.session_state.chat_history = result.get("chat_history", [])
 
-                    # Format citations: "filename.pdf (Page N)"
+                    # Format citations
                     citations = []
                     for c in raw_citations:
                         src = os.path.basename(c.get("source", "Unknown"))
@@ -218,7 +223,6 @@ if st.session_state.pdfs_uploaded:
                     st.session_state.messages.append({"role": "assistant", "content": err_msg})
 
 else:
-    # Welcome screen when no docs are uploaded
     st.info("👈 Upload PDF documents using the sidebar to get started.")
 
     st.markdown("""
