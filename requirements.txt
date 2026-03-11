@@ -1,0 +1,14 @@
+langchain
+langchain-groq
+langchain-huggingface
+langchain-community
+faiss-cpu
+rank_bm25
+Flask
+streamlit
+pypdf
+langgraph
+python-dotenv
+requests
+sentence-transformers
+pydantic

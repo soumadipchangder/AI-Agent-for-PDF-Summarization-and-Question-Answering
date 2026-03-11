@@ -1,0 +1,25 @@
+# Environment secrets — NEVER commit these
+.env
+
+# FAISS index — regenerated at runtime from uploaded PDFs
+faiss_index/
+
+# Uploaded PDF files — user data, not part of the repo
+uploads/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE files
+.DS_Store
+.idea/
+.vscode/
