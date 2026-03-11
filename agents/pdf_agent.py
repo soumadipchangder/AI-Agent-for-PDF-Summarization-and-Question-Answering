@@ -70,9 +70,13 @@ Standalone Question:""",
         # --- Prompt: Generate answer ---
         self.generate_prompt = PromptTemplate(
             template="""You are an expert AI assistant for analyzing PDF documents.
-Use ONLY the provided context to answer the question. Be precise and factual.
-If the context doesn't contain enough information to answer accurately, say "I don't have enough information in the retrieved context to answer this precisely."
-Do NOT guess or make up information.
+Use ONLY the provided context to answer the question. Follow these rules strictly:
+
+1. DISTINGUISH between the document's MAIN CONTENT (body text, sections, tables, figures) and the REFERENCES/BIBLIOGRAPHY section.
+2. When asked about items "mentioned" or "discussed" in the document, refer ONLY to the main body content — NOT the reference list or bibliography.
+3. References/citations (e.g. "[1] Author et al., 2020") are bibliography entries, NOT content discussed in the document.
+4. Be precise with counts and lists. If you list items, count them accurately.
+5. If the context doesn't contain enough information, say so. Do NOT guess.
 
 Question: {question}
 
