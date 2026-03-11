@@ -20,8 +20,8 @@ class HybridCustomRetriever(BaseRetriever):
         """
         Fetch results from both retrievers, merge, deduplicate, and return top-k.
         """
-        faiss_docs = self.faiss_retriever.get_relevant_documents(query)
-        bm25_docs = self.bm25_retriever.get_relevant_documents(query)
+        faiss_docs = self.faiss_retriever.invoke(query)
+        bm25_docs = self.bm25_retriever.invoke(query)
 
         # Merge: prioritize documents that appear in both (interleave strategy)
         seen_contents = set()
