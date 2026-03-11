@@ -1,59 +1,86 @@
-from typing import List, Optional
+from typing import List, Optional, Any
 from langchain_core.documents import Document
-from langchain_community.retrievers import EnsembleRetriever
+from langchain_core.retrievers import BaseRetriever
 from langchain_community.retrievers import BM25Retriever
+from pydantic import Field
 from rag.vectorstore import VectorStoreManager
+
+
+class HybridCustomRetriever(BaseRetriever):
+    """
+    A custom retriever that manually combines results from FAISS (dense) and BM25 (sparse)
+    without depending on EnsembleRetriever — which has unstable import paths across
+    LangChain versions.
+    """
+    faiss_retriever: Any = Field(description="FAISS vector similarity retriever")
+    bm25_retriever: Any = Field(description="BM25 keyword-based retriever")
+    k: int = Field(default=6, description="Number of final results to return")
+
+    def _get_relevant_documents(self, query: str) -> List[Document]:
+        """
+        Fetch results from both retrievers, merge, deduplicate, and return top-k.
+        """
+        faiss_docs = self.faiss_retriever.get_relevant_documents(query)
+        bm25_docs = self.bm25_retriever.get_relevant_documents(query)
+
+        # Merge: prioritize documents that appear in both (interleave strategy)
+        seen_contents = set()
+        merged = []
+
+        # Interleave results from both sources for diversity
+        max_len = max(len(faiss_docs), len(bm25_docs))
+        for i in range(max_len):
+            if i < len(faiss_docs):
+                doc = faiss_docs[i]
+                key = doc.page_content[:200]
+                if key not in seen_contents:
+                    seen_contents.add(key)
+                    merged.append(doc)
+            if i < len(bm25_docs):
+                doc = bm25_docs[i]
+                key = doc.page_content[:200]
+                if key not in seen_contents:
+                    seen_contents.add(key)
+                    merged.append(doc)
+
+        return merged[:self.k]
+
 
 class HybridRetriever:
     """
-    Combines dense space semantic retrieval (FAISS) and sparse keyword retrieval (BM25)
-    using LangChain's EnsembleRetriever.
+    Wrapper that builds the HybridCustomRetriever from a VectorStoreManager
+    and a set of documents (for BM25 indexing).
     """
-    
+
     def __init__(self, vectorstore_manager: VectorStoreManager):
         self.vectorstore_manager = vectorstore_manager
-        self.bm25_retriever: Optional[BM25Retriever] = None
-        self.ensemble_retriever: Optional[EnsembleRetriever] = None
+        self.retriever: Optional[HybridCustomRetriever] = None
         self.all_documents: List[Document] = []
-        
-    def _initialize_bm25(self, documents: List[Document]):
-        """
-        Initializes the BM25 keyword retriever.
-        """
-        if not documents:
-            return
-            
-        print(f"Initializing BM25 retriever with {len(documents)} document chunks...")
-        self.bm25_retriever = BM25Retriever.from_documents(documents)
-        self.bm25_retriever.k = 4 # Retrieve top 4 using BM25
-        
+
     def build_ensemble_retriever(self, documents: List[Document]):
         """
-        Builds the combined EnsembleRetriever from the base FAISS and BM25 retrievers.
-        This must be called whenever new documents are added to update the bm25 index.
+        Builds the combined retriever from chunked documents.
+        Must be called after documents are added to the vector store.
         """
         if not documents:
             return
-            
-        # Keep track of all documents to re-build BM25 if needed
+
         self.all_documents.extend(documents)
-        
-        self._initialize_bm25(self.all_documents)
-        
-        # Get FAISS retriever
-        faiss_retriever = self.vectorstore_manager.get_retriever(search_kwargs={"k": 4})
-        
-        # Combine FAISS and BM25 retrievers with equal weighting
-        print("Building Ensemble Retriever (Weights: FAISS=0.5, BM25=0.5)...")
-        self.ensemble_retriever = EnsembleRetriever(
-            retrievers=[self.bm25_retriever, faiss_retriever],
-            weights=[0.5, 0.5]
+
+        print(f"Building BM25 retriever with {len(self.all_documents)} chunks...")
+        bm25 = BM25Retriever.from_documents(self.all_documents)
+        bm25.k = 4
+
+        faiss_ret = self.vectorstore_manager.get_retriever(search_kwargs={"k": 4})
+
+        self.retriever = HybridCustomRetriever(
+            faiss_retriever=faiss_ret,
+            bm25_retriever=bm25,
+            k=6
         )
-        
-    def get_retriever(self) -> EnsembleRetriever:
-        """
-        Returns the active EnsembleRetriever.
-        """
-        if self.ensemble_retriever is None:
-            raise ValueError("Ensemble Retriever not initialized. Please build it first by loading documents.")
-        return self.ensemble_retriever
+        print("HybridCustomRetriever built successfully.")
+
+    def get_retriever(self) -> HybridCustomRetriever:
+        if self.retriever is None:
+            raise ValueError("Retriever not initialized. Call build_ensemble_retriever() first.")
+        return self.retriever
