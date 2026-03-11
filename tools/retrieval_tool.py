@@ -69,14 +69,14 @@ class HybridRetriever:
 
         print(f"Building BM25 retriever with {len(self.all_documents)} chunks...")
         bm25 = BM25Retriever.from_documents(self.all_documents)
-        bm25.k = 4
+        bm25.k = 8
 
-        faiss_ret = self.vectorstore_manager.get_retriever(search_kwargs={"k": 4})
+        faiss_ret = self.vectorstore_manager.get_retriever(search_kwargs={"k": 8})
 
         self.retriever = HybridCustomRetriever(
             faiss_retriever=faiss_ret,
             bm25_retriever=bm25,
-            k=6
+            k=10
         )
         print("HybridCustomRetriever built successfully.")
 
