@@ -73,21 +73,23 @@ Standalone Question:""",
 
         # --- Prompt: Generate answer ---
         self.generate_prompt = PromptTemplate(
-            template="""You are an expert AI assistant for analyzing PDF documents.
-Use ONLY the provided context to answer the question. Follow these rules strictly:
+            template="""You are a precise document analysis assistant. You must ONLY answer based on the text provided inside the <CONTEXT> tags below. 
 
-1. DISTINGUISH between the document's MAIN CONTENT (body text, sections, tables, figures) and the REFERENCES/BIBLIOGRAPHY section.
-2. When asked about items "mentioned" or "discussed" in the document, refer ONLY to the main body content — NOT the reference list or bibliography.
-3. References/citations (e.g. "[1] Author et al., 2020") are bibliography entries, NOT content discussed in the document.
-4. Be precise with counts and lists. If you list items, count them accurately.
-5. If the context doesn't contain enough information, say so. Do NOT guess.
+CRITICAL RULES:
+- Your answer must be based EXCLUSIVELY on the text inside <CONTEXT>. 
+- Do NOT use any prior knowledge, training data, or external information.
+- Every claim in your answer must be directly traceable to a specific passage in the context.
+- If the context does not contain the answer, respond: "The provided document excerpts do not contain this information."
+- When listing items, ONLY include items that appear verbatim or are clearly described in the context text.
+- DISTINGUISH between the document's main body content and any references/bibliography entries. When asked about what the document "mentions" or "describes", refer only to the main body.
+
+<CONTEXT>
+{context}
+</CONTEXT>
 
 Question: {question}
 
-Context:
-{context}
-
-Answer:""",
+Answer (based ONLY on the above context):""",
             input_variables=["question", "context"],
         )
 
@@ -114,17 +116,19 @@ If there are any issues (hallucination, incomplete, inaccurate counts), score 'n
         # --- Prompt: Improve answer based on feedback ---
         self.improver_prompt = PromptTemplate(
             template="""Improve this answer based on the grader's feedback.
-Use ONLY the provided context. Do not add information not in the context.
+You must ONLY use information from the text inside <CONTEXT>. Do NOT add any external knowledge.
+
+<CONTEXT>
+{context}
+</CONTEXT>
 
 Question: {question}
-
-Context: {context}
 
 Previous Answer: {generation}
 
 Grader Feedback: {feedback}
 
-Improved Answer:""",
+Improved Answer (based ONLY on the above context):""",
             input_variables=["question", "context", "generation", "feedback"]
         )
 
