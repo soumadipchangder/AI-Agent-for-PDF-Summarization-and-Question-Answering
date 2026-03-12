@@ -4,6 +4,7 @@ from langgraph.graph import StateGraph, START, END
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, Field
+from tools.reranker import Reranker
 
 
 # ============================================================
@@ -51,6 +52,9 @@ class PDFAgent:
             temperature=0,
             api_key=groq_api_key
         )
+
+        # Initialize cross-encoder re-ranker
+        self.reranker = Reranker()
 
         # --- Prompt: Reformulate follow-up into standalone question ---
         self.reformulate_prompt = PromptTemplate(
@@ -187,6 +191,11 @@ Improved Answer:""",
         question = state.get("standalone_question", state["question"])
 
         documents = self.retriever.invoke(question)
+        print(f"Initial retrieval: {len(documents)} chunks")
+
+        # Re-rank with cross-encoder for precision
+        documents = self.reranker.rerank(question, documents, top_k=5)
+        print(f"After re-ranking: {len(documents)} chunks")
 
         # Extract citations
         citations = []
@@ -200,7 +209,7 @@ Improved Answer:""",
         # Deduplicate citations
         unique_citations = [dict(t) for t in {tuple(d.items()) for d in citations}]
 
-        print(f"Retrieved {len(documents)} chunks, {len(unique_citations)} unique sources")
+        print(f"{len(unique_citations)} unique sources")
         return {"documents": documents, "citations": unique_citations}
 
     # ----------------------------------------------------------
