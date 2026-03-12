@@ -7,94 +7,289 @@ sdk: docker
 pinned: false
 ---
 
-# AI PDF Agent
+# 📄 AI PDF Agent
 
-A production-ready Retrieval-Augmented Generation (RAG) system for querying and summarizing PDF documents. Powered by LangGraph with self-reflection for high-quality, citation-backed answers.
+<p align="center">
 
-## Features
+<img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
+<img src="https://img.shields.io/badge/LangChain-1C3C3C?style=for-the-badge"/>
+<img src="https://img.shields.io/badge/LangGraph-Agent%20Workflow-blue?style=for-the-badge"/>
+<img src="https://img.shields.io/badge/FAISS-Vector%20Database-orange?style=for-the-badge"/>
+<img src="https://img.shields.io/badge/HuggingFace-Embeddings-yellow?style=for-the-badge&logo=huggingface"/>
+<img src="https://img.shields.io/badge/Groq-LLM-black?style=for-the-badge"/>
+<img src="https://img.shields.io/badge/Streamlit-UI-red?style=for-the-badge&logo=streamlit"/>
+<img src="https://img.shields.io/badge/Docker-Deployment-blue?style=for-the-badge&logo=docker"/>
 
-- **Multi-Document Ingestion**: Upload and process multiple PDFs simultaneously.
-- **Hybrid Retrieval**: Custom retriever combining FAISS (dense semantic) + BM25 (sparse keyword) for high recall.
-- **Self-Reflecting Agent**: LangGraph workflow that generates, evaluates, and optionally rewrites answers.
-- **Automatic Summarization**: Generates a high-level summary upon document upload.
-- **Source Citations**: Returns exact source filename and page numbers with every answer.
-- **Conversational Memory**: Maintains context for natural follow-up questions.
+</p>
 
-## Architecture
+A **production-grade Retrieval-Augmented Generation (RAG) system** that enables users to upload PDF documents, automatically summarize them, and ask context-aware questions with **source citations**.
 
-```
-Streamlit UI (app.py)
-│
-├── PDF Upload → loader.py → chunking.py → embeddings.py → vectorstore.py (FAISS)
-│
-├── Hybrid Retriever (tools/retrieval_tool.py) → FAISS + BM25
-│
-└── LangGraph Agent (agents/pdf_agent.py) → Groq LLM (llama-3.1-8b-instant)
-```
-
-Single-process architecture — no backend server needed.
-
-## Deployment on Hugging Face Spaces
-
-### 1. Create a New Space
-- Go to [huggingface.co/spaces](https://huggingface.co/spaces) → **Create New Space**
-- Select **Docker** as the SDK
-
-### 2. Set the GROQ_API_KEY Secret
-- Go to your Space **Settings → Repository Secrets**
-- Add a secret named `GROQ_API_KEY` with your key from [console.groq.com](https://console.groq.com/keys)
-
-### 3. Push the Code
-```bash
-git remote add space https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
-git add .
-git commit -m "Initial commit"
-git push space main
-```
-
-The Space will build and expose the Streamlit UI on port 7860 automatically.
+The system uses **LangGraph agents, hybrid retrieval (BM25 + FAISS), and Groq-powered LLM inference** to generate accurate and explainable responses.
 
 ---
 
-## Local Development
+# 🚀 Live Demo
 
-### Prerequisites
-- Python 3.10+
-- A valid [Groq API Key](https://console.groq.com/keys)
+Try the application directly on Hugging Face Spaces:
 
-### Setup
-```bash
-# Install dependencies
-pip install -r requirements.txt
+👉 https://huggingface.co/spaces/Soumya79/AI-Pdf-Agent
 
-# Create .env file
-echo 'GROQ_API_KEY="your-key-here"' > .env
+---
 
-# Run the app
-streamlit run app.py
+# ✨ Key Features
+
+### 📚 Multi-PDF Document Ingestion
+Upload and process **multiple PDF files simultaneously**.
+
+### 🔎 Hybrid Retrieval
+Custom retrieval system combining:
+
+- **FAISS** for dense semantic vector search
+- **BM25** for keyword-based sparse retrieval
+
+This improves recall and retrieval accuracy.
+
+### 🤖 Agent-Based Reasoning
+LangGraph workflow orchestrates the reasoning pipeline:
+
+- Retrieve relevant document chunks
+- Generate answer using LLM
+- Self-reflect and improve responses
+
+### 📝 Automatic Document Summarization
+Generates a concise summary immediately after PDF ingestion.
+
+### 📑 Source Citations
+Every answer includes:
+
+- Source PDF filename
+- Exact page number references
+
+Ensuring **traceable and explainable responses**.
+
+### 💬 Conversational Memory
+Maintains context across questions for **natural follow-up interactions**.
+
+---
+
+# 🧠 System Architecture
+
+```
+User
+ │
+ ▼
+Streamlit UI
+ │
+ ▼
+PDF Upload
+ │
+ ▼
+Document Processing Pipeline
+ ├── PDF Loader
+ ├── Text Chunking
+ ├── Embedding Generation
+ └── Vector Storage (FAISS)
+ │
+ ▼
+Hybrid Retrieval System
+ ├── FAISS Semantic Search
+ └── BM25 Keyword Search
+ │
+ ▼
+LangGraph Agent Workflow
+ ├── Retrieve Context
+ ├── Generate Answer
+ └── Reflect & Improve
+ │
+ ▼
+Groq LLM (LLaMA-3.1-8B)
+ │
+ ▼
+Final Answer + Citations
 ```
 
-### Docker (Local)
-```bash
-docker build -t pdf-agent .
-docker run -p 7860:7860 -e GROQ_API_KEY="your-groq-api-key" pdf-agent
-```
-Access the app at [http://localhost:7860](http://localhost:7860)
+Single-process architecture optimized for **Hugging Face Spaces deployment**.
 
-## Directory Structure
+---
+
+# 🛠 Tech Stack
+
+| Component | Technology |
+|--------|--------|
+| Frontend | Streamlit |
+| Agent Framework | LangGraph |
+| LLM Integration | LangChain |
+| Vector Database | FAISS |
+| Embeddings | HuggingFace Sentence Transformers |
+| LLM Provider | Groq (LLaMA-3.1-8B-Instant) |
+| Retrieval | Hybrid (BM25 + FAISS) |
+| Deployment | Hugging Face Spaces + Docker |
+
+---
+
+# 📂 Project Structure
 
 ```
-├── app.py                     # Streamlit App (single entry point)
+pdf-agent/
+
+app.py
+│
 ├── agents/
-│   └── pdf_agent.py           # LangGraph Agent (retrieve → generate → reflect)
+│   └── pdf_agent.py
+│
 ├── rag/
-│   ├── loader.py              # PDF ingestion via PyPDF
-│   ├── chunking.py            # RecursiveCharacterTextSplitter
-│   ├── embeddings.py          # HuggingFace sentence-transformer
-│   └── vectorstore.py         # FAISS vector database
+│   ├── loader.py
+│   ├── chunking.py
+│   ├── embeddings.py
+│   └── vectorstore.py
+│
 ├── tools/
-│   └── retrieval_tool.py      # Custom FAISS + BM25 hybrid retriever
+│   └── retrieval_tool.py
+│
 ├── requirements.txt
 ├── Dockerfile
 └── README.md
 ```
+
+---
+
+# ⚙️ Local Development
+
+## Prerequisites
+
+- Python **3.10+**
+- Groq API Key
+
+Get one here:
+
+https://console.groq.com/keys
+
+---
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+Create `.env` file:
+
+```bash
+echo 'GROQ_API_KEY="your-api-key-here"' > .env
+```
+
+Run the application:
+
+```bash
+streamlit run app.py
+```
+
+Access the app:
+
+```
+http://localhost:8501
+```
+
+---
+
+# 🐳 Docker Deployment
+
+Build the Docker image:
+
+```bash
+docker build -t pdf-agent .
+```
+
+Run container:
+
+```bash
+docker run -p 7860:7860 -e GROQ_API_KEY="your-groq-api-key" pdf-agent
+```
+
+Open:
+
+```
+http://localhost:7860
+```
+
+---
+
+# ☁️ Hugging Face Spaces Deployment
+
+### Step 1 — Create Space
+
+Go to:
+
+https://huggingface.co/spaces
+
+Select:
+
+```
+SDK → Docker
+```
+
+---
+
+### Step 2 — Add API Key
+
+Navigate to:
+
+```
+Settings → Repository Secrets
+```
+
+Add:
+
+```
+GROQ_API_KEY = your_api_key
+```
+
+---
+
+### Step 3 — Push Code
+
+```bash
+git remote add space https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
+
+git add .
+git commit -m "Initial commit"
+
+git push space main
+```
+
+Hugging Face will automatically build and deploy the application.
+
+---
+
+# 📸 Example Queries
+
+```
+Summarize the document
+What methodology was used in the study?
+Which datasets were used?
+Explain the key findings of the paper
+```
+
+---
+
+# 📈 Future Improvements
+
+- Cross-Encoder Re-ranking for improved retrieval accuracy
+- Multi-modal document support
+- Research literature review generation
+- Persistent vector database
+- Knowledge graph integration
+
+---
+
+# 👨‍💻 Author
+
+**Soumyadip Changder**
+
+AI Engineer | Machine Learning | Agentic AI Systems
+
+GitHub  
+https://github.com/soumadipchangder
+
+Hugging Face  
+https://huggingface.co/Soumya79
