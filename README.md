@@ -26,6 +26,18 @@ A **production-grade Retrieval-Augmented Generation (RAG) system** that enables 
 
 The system uses **LangGraph agents, hybrid retrieval (BM25 + FAISS), and Groq-powered LLM inference** to generate accurate and explainable responses.
 
+## Why This Project
+
+Large Language Models cannot efficiently process long documents directly due to context limitations.
+
+This project solves the problem using **Retrieval-Augmented Generation (RAG)**, which retrieves relevant document segments and supplies them as context to the language model.
+
+This approach enables:
+
+- accurate document question answering
+- scalable document processing
+- explainable answers with citations
+
 ---
 
 # 🚀 Live Demo
